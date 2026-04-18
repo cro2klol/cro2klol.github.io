@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🎁 Мой Вишлист</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+      min-height: 100vh; color: #e0e0e0;
+      display: flex; flex-direction: column; align-items: center; padding: 40px 20px;
+    }
+    .header { text-align: center; margin-bottom: 40px; }
+    .header h1 {
+      font-size: 2.8rem;
+      background: linear-gradient(90deg, #f7971e, #ffd200);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+      margin-bottom: 8px;
+    }
+    .header p { font-size: 1.1rem; color: #aaa; }
+    .name-section {
+      background: rgba(255,255,255,0.06); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+      padding: 24px 32px; margin-bottom: 36px; text-align: center;
+      width: 100%; max-width: 500px;
+    }
+    .name-section label { display: block; font-size: 1.05rem; margin-bottom: 12px; color: #ccc; }
+    .name-section input {
+      width: 100%; padding: 12px 18px; border-radius: 10px;
+      border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.07);
+      color: #fff; font-size: 1rem; outline: none; transition: border-color 0.3s;
+    }
+    .name-section input:focus { border-color: #ffd200; }
+    .name-section input::placeholder { color: #777; }
+    .wishlist {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 24px; width: 100%; max-width: 960px;
+    }
+    .card {
+      background: rgba(255,255,255,0.06); backdrop-filter: blur(12px);
+      border: 1px solid rgba(255,255,255,0.1); border-radius: 16px;
+      padding: 28px 24px; display: flex; flex-direction: column;
+      align-items: center; text-align: center; transition: transform 0.3s, box-shadow 0.3s, opacity 0.3s;
+      position: relative; overflow: hidden;
+    }
+    .card:hover { transform: translateY(-6px); box-shadow: 0 12px 32px rgba(0,0,0,0.4); }
+    .card.claimed { opacity: 0.55; pointer-events: none; }
+    .card.claimed::after {
+      content: '✓ Занято'; position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%, -50%) rotate(-18deg);
+      background: rgba(255, 70, 70, 0.85); color: #fff; font-size: 1.4rem;
+      font-weight: 700; padding: 6px 28px; border-radius: 8px; letter-spacing: 1px;
+    }
+    .card-emoji { font-size: 3.2rem; margin-bottom: 12px; }
+    .card-title { font-size: 1.2rem; font-weight: 600; margin-bottom: 6px; color: #fff; }
+    .card-desc { font-size: 0.9rem; color: #999; margin-bottom: 18px; line-height: 1.4; }
+    .claim-btn {
+      padding: 10px 28px; border: none; border-radius: 10px;
+      background: linear-gradient(135deg, #f7971e, #ffd200); color: #1a1a2e;
+      font-size: 0.95rem; font-weight: 700; cursor: pointer; transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .claim-btn:hover { transform: scale(1.05); box-shadow: 0 4px 20px rgba(255, 210, 0, 0.4); }
+    .card.claimed .claim-btn { display: none; }
+    .card .claimed-by { display: none; font-size: 0.85rem; color: #ff6b6b; margin-top: 4px; }
+    .card.claimed .claimed-by { display: block; }
+    .card.is-money { border-color: rgba(74, 222, 128, 0.3); background: rgba(74, 222, 128, 0.05); }
+    .card.is-money .claim-btn { background: linear-gradient(135deg, #4ade80, #22c55e); }
+    .card.is-money .claimed-by { color: #4ade80; display: block; text-align: center; font-weight: 500; }
+
+    #admin-panel { display: none; width: 100%; max-width: 960px; margin-top: 60px; padding: 0 20px; }
+    .admin-box {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(74, 222, 128, 0.2);
+      border-radius: 16px; padding: 24px; backdrop-filter: blur(12px);
+    }
+    .admin-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; }
+    .admin-header h2 { color: #4ade80; font-size: 1.3rem; }
+    .admin-refresh {
+      background: transparent; border: 1px solid #4ade80; color: #4ade80;
+      padding: 6px 14px; border-radius: 8px; cursor: pointer; font-weight: 600;
+    }
+    .admin-refresh:hover { background: rgba(74, 222, 128, 0.1); }
+    .admin-table { width: 100%; border-collapse: collapse; }
+    .admin-table th, .admin-table td {
+      padding: 12px; text-align: left; border-bottom: 1px solid rgba(255,255,255,0.1);
+    }
+    .admin-table th { color: #aaa; font-weight: 600; font-size: 0.9rem; }
+    .status-free { color: #888; }
+    .status-claimed { color: #ff6b6b; font-weight: 600; }
+    .status-money { color: #4ade80; font-weight: 600; }
+
+    .toast {
+      position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
+      background: #2ecc71; color: #fff; padding: 14px 28px; border-radius: 12px;
+      font-weight: 600; font-size: 1rem; box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+      opacity: 0; transition: transform 0.4s ease, opacity 0.4s ease; z-index: 999;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .footer { margin-top: 60px; color: #555; font-size: 0.85rem; text-align: center; }
+    @media (max-width: 600px) {
+      .header h1 { font-size: 2rem; }
+      .wishlist { grid-template-columns: 1fr; }
+      .admin-table th:nth-child(2), .admin-table td:nth-child(2) { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>🎁 Мой Вишлист</h1>
+    <p>Выбери подарок — и он твой! Другие уже не смогут его занять 😊</p>
+  </div>
+
+  <div class="name-section">
+    <label for="userName">👤 Введи своё имя, чтобы «забрать» подарок или внести вклад:</label>
+    <input type="text" id="userName" placeholder="Например: Аня" maxlength="30" autocomplete="off">
+  </div>
+
+  <div class="wishlist" id="wishlist"></div>
+
+  <div id="admin-panel">
+    <div class="admin-box">
+      <div class="admin-header">
+        <h2>📊 Панель администратора</h2>
+        <button class="admin-refresh" onclick="loadGifts(true)">🔄 Обновить</button>
+      </div>
+      <table class="admin-table">
+        <thead><tr><th>Подарок</th><th>Статус</th><th>Кто выбрал / участники</th></tr></thead>
+        <tbody id="admin-tbody"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="toast" id="toast">🎉 Спасибо! Ты забрал(а) подарок!</div>
+  <div class="footer">Синхронизация в реальном времени через Supabase</div>
+
+  <script>
+    const SUPABASE_URL = 'https://sdvxsjusazcaknwheebg.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkdnhzanVzYXpjYWtud2hlZWJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MDMzNzAsImV4cCI6MjA5MjA3OTM3MH0.9jH9dd-ibArTX9er6G2VSSUhv6dp6Z7McRBdnwsxXH0';
+    const ADMIN_SECRET = "wishlist2026";
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    const wishlistItems = [
+      { id: "vacuum",          emoji: "📦", title: "Вакууматор",                description: "Для длительного хранения продуктов" },
+      { id: "steam_cleaner",   emoji: "💨", title: "Пароочиститель напольный",  description: "Мощная очистка без химии" },
+      { id: "window_cleaner",  emoji: "🪟", title: "Мойщик окон",               description: "Идеальная чистота стёкол" },
+      { id: "massage_cert",    emoji: "💆", title: "Сертификат на массаж",      description: "Расслабление и восстановление" },
+      { id: "kuchenland_cert", emoji: "🛋️", title: "Сертификат в Кюхенленд",    description: "На всё для кухни и дома" },
+      { id: "tezenis_cert",    emoji: "👙", title: "Сертификат в Тезенис",      description: "Стильное бельё и одежда" },
+      { id: "robe",            emoji: "🧥", title: "Большой махровый халат",    description: "Тёплый, мягкий, размер L/XL" },
+      { id: "money",           emoji: "💸", title: "💰 Деньги",                 description: "Собираем общий бюджет на подарок" },
+    ];
+
+    const wishlistEl = document.getElementById("wishlist");
+
+    wishlistItems.forEach(item => {
+      const card = document.createElement("div");
+      card.classList.add("card");
+      if (item.id === 'money') card.classList.add("is-money");
+      card.id = `card-${item.id}`;
+      const btnText = item.id === 'money' ? '💰 Внести вклад' : '🎁 Забрать';
+      card.innerHTML = `
+        <div class="card-emoji">${item.emoji}</div>
+        <div class="card-title">${item.title}</div>
+        <div class="card-desc">${item.description}</div>
+        <button class="claim-btn" onclick="claimGift('${item.id}')">${btnText}</button>
+        <div class="claimed-by"></div>
+      `;
+      wishlistEl.appendChild(card);
+    });
+
+    function updateCard(item) {
+      const card = document.getElementById(`card-${item.id}`);
+      if (!card) return;
+      const info = card.querySelector(".claimed-by");
+      const names = item.claimed_by || [];
+
+      if (item.id === 'money') {
+        card.classList.remove("claimed");
+        info.style.display = "block";
+        info.textContent = names.length > 0 ? `Участники: ${names.join(', ')}` : "Пока никто не отметился";
+      } else if (item.claimed) {
+        card.classList.add("claimed");
+        info.style.display = "block";
+        info.textContent = `Забрал(а): ${names[0] || "..."}`;
+      } else {
+        card.classList.remove("claimed");
+        info.style.display = "none";
+      }
+    }
+
+    function renderAdminTable(data) {
+      const tbody = document.getElementById('admin-tbody');
+      tbody.innerHTML = '';
+      data.forEach(item => {
+        const names = item.claimed_by || [];
+        let status, users;
+        if (item.id === 'money') {
+          status = '🟡 Сбор средств';
+          users = names.length ? names.join(', ') : '—';
+        } else if (item.claimed) {
+          status = '🔴 Забрано';
+          users = names[0] || '—';
+        } else {
+          status = '🟢 Свободно';
+          users = '—';
+        }
+        tbody.innerHTML += `<tr><td>${item.emoji} ${item.title}</td><td class="${status.includes('🔴') ? 'status-claimed' : status.includes('🟡') ? 'status-money' : 'status-free'}">${status}</td><td>${users}</td></tr>`;
+      });
+    }
+
+    async function loadGifts(isAdminRefresh = false) {
+      const { data, error } = await supabase.from('gifts').select('*');
+      if (error) return console.error("Ошибка загрузки:", error);
+      data.forEach(updateCard);
+      if (document.getElementById('admin-panel').style.display !== 'none') {
+        renderAdminTable(data);
+      }
+    }
+
+    supabase.channel('gifts_realtime')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'gifts' }, (payload) => {
+        updateCard(payload.new);
+        if (document.getElementById('admin-panel').style.display !== 'none') loadGifts();
+      })
+      .subscribe();
+
+    async function claimGift(id) {
+      const nameInput = document.getElementById("userName");
+      const name = nameInput.value.trim();
+      if (!name) {
+        nameInput.focus(); nameInput.style.borderColor = "#ff6b6b";
+        setTimeout(() => nameInput.style.borderColor = "", 2000);
+        return alert("✏️ Сначала введи своё имя!");
+      }
+
+      const btn = document.querySelector(`#card-${id} .claim-btn`);
+      btn.textContent = "⏳ Обработка..."; btn.disabled = true;
+
+      if (id === 'money') {
+        const {  current } = await supabase.from('gifts').select('claimed_by').eq('id', 'money').single();
+        const names = current?.claimed_by || [];
+        if (names.includes(name)) {
+          alert("✏️ Вы уже отметились в этом пункте!");
+          btn.textContent = "💰 Внести вклад"; btn.disabled = false; return;
+        }
+        names.push(name);
+        const { error } = await supabase.from('gifts').update({ claimed_by: names }).eq('id', 'money');
+        btn.textContent = "💰 Внести вклад"; btn.disabled = false;
+        if (error) { console.error(error); alert("⚠️ Ошибка сети."); }
+        else { showToast(`🎉 ${name}, спасибо за вклад!`); nameInput.value = ""; }
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('gifts')
+        .update({ claimed: true, claimed_by: [name] })
+        .eq('id', id)
+        .eq('claimed', false)
+        .select();
+
+      if (error) { console.error(error); alert("⚠️ Ошибка сети. Попробуй позже."); }
+      else if (data?.length > 0) {
+        showToast(`🎉 ${name}, ты забрал(а) подарок!`);
+        nameInput.value = "";
+      } else {
+        alert("😔 Этот подарок уже кто-то забрал!");
+      }
+      btn.textContent = "🎁 Забрать"; btn.disabled = false;
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById("toast");
+      toast.textContent = msg; toast.classList.add("show");
+      setTimeout(() => toast.classList.remove("show"), 3000);
+    }
+
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('admin') === ADMIN_SECRET) {
+      document.getElementById('admin-panel').style.display = 'block';
+      loadGifts();
+    }
+    loadGifts();
+  </script>
+</body>
+</html>
