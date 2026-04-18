@@ -69,7 +69,6 @@
     .card.is-money { border-color: rgba(74, 222, 128, 0.3); background: rgba(74, 222, 128, 0.05); }
     .card.is-money .claim-btn { background: linear-gradient(135deg, #4ade80, #22c55e); }
     .card.is-money .claimed-by { color: #4ade80; display: block; text-align: center; font-weight: 500; }
-
     #admin-panel { display: none; width: 100%; max-width: 960px; margin-top: 60px; padding: 0 20px; }
     .admin-box {
       background: rgba(255,255,255,0.05); border: 1px solid rgba(74, 222, 128, 0.2);
@@ -90,7 +89,6 @@
     .status-free { color: #888; }
     .status-claimed { color: #ff6b6b; font-weight: 600; }
     .status-money { color: #4ade80; font-weight: 600; }
-
     .toast {
       position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%) translateY(100px);
       background: #2ecc71; color: #fff; padding: 14px 28px; border-radius: 12px;
@@ -99,6 +97,11 @@
     }
     .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
     .footer { margin-top: 60px; color: #555; font-size: 0.85rem; text-align: center; }
+    .error-banner {
+      display: none; background: rgba(255, 70, 70, 0.2); border: 1px solid #ff6b6b;
+      color: #ff9999; padding: 12px 20px; border-radius: 12px; margin-bottom: 20px;
+      text-align: center; max-width: 600px; font-size: 0.95rem;
+    }
     @media (max-width: 600px) {
       .header h1 { font-size: 2rem; }
       .wishlist { grid-template-columns: 1fr; }
@@ -111,6 +114,8 @@
     <h1>🎁 Мой Вишлист</h1>
     <p>Выбери подарок — и он твой! Другие уже не смогут его занять 😊</p>
   </div>
+
+  <div class="error-banner" id="error-banner"></div>
 
   <div class="name-section">
     <label for="userName">👤 Введи своё имя, чтобы «забрать» подарок или внести вклад:</label>
@@ -136,11 +141,19 @@
   <div class="footer">Синхронизация в реальном времени через Supabase</div>
 
   <script>
+    // 🔧 ВСТАВЬ СВОИ ДАННЫЕ ИЗ SUPABASE (обязательно!)
     const SUPABASE_URL = 'https://sdvxsjusazcaknwheebg.supabase.co';
-    const SUPABASE_ANON_KEY = 'sb_publishable_YFrUJG_RAaL0BLW9oKLM2A_dj1yZGSf';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNkdnhzanVzYXpjYWtud2hlZWJnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY1MDMzNzAsImV4cCI6MjA5MjA3OTM3MH0.9jH9dd-ibArTX9er6G2VSSUhv6dp6Z7McRBdnwsxXH0';
     const ADMIN_SECRET = "wishlist2026";
 
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    let supabase;
+    try {
+      if (!window.supabase) throw new Error('SDK не загрузился. Проверь интернет или CDN.');
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    } catch (e) {
+      document.getElementById('error-banner').style.display = 'block';
+      document.getElementById('error-banner').textContent = '⚠️ Ошибка подключения к Supabase: ' + e.message;
+    }
 
     const wishlistItems = [
       { id: "vacuum",          emoji: "📦", title: "Вакууматор",                description: "Для длительного хранения продуктов" },
@@ -153,8 +166,8 @@
       { id: "money",           emoji: "💸", title: "💰 Деньги",                 description: "Собираем общий бюджет на подарок" },
     ];
 
+    // Рендер карточек (работает сразу, без ожидания БД)
     const wishlistEl = document.getElementById("wishlist");
-
     wishlistItems.forEach(item => {
       const card = document.createElement("div");
       card.classList.add("card");
@@ -212,22 +225,35 @@
     }
 
     async function loadGifts(isAdminRefresh = false) {
-      const { data, error } = await supabase.from('gifts').select('*');
-      if (error) return console.error("Ошибка загрузки:", error);
-      data.forEach(updateCard);
-      if (document.getElementById('admin-panel').style.display !== 'none') {
-        renderAdminTable(data);
+      if (!supabase) return;
+      try {
+        const { data, error } = await supabase.from('gifts').select('*');
+        if (error) throw error;
+        data.forEach(updateCard);
+        if (document.getElementById('admin-panel').style.display !== 'none') {
+          renderAdminTable(data);
+        }
+      } catch (e) {
+        console.error("Ошибка загрузки подарков:", e);
+        document.getElementById('error-banner').style.display = 'block';
+        document.getElementById('error-banner').textContent = `⚠️ Не удалось загрузить данные: ${e.message}`;
       }
     }
 
-    supabase.channel('gifts_realtime')
-      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'gifts' }, (payload) => {
-        updateCard(payload.new);
-        if (document.getElementById('admin-panel').style.display !== 'none') loadGifts();
-      })
-      .subscribe();
+    // Realtime подписка
+    if (supabase) {
+      supabase.channel('gifts_realtime')
+        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'gifts' }, (payload) => {
+          updateCard(payload.new);
+          if (document.getElementById('admin-panel').style.display !== 'none') loadGifts();
+        })
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') console.log('✅ Realtime подключён');
+        });
+    }
 
     async function claimGift(id) {
+      if (!supabase) return alert("⚠️ Подключение к базе не установлено.");
       const nameInput = document.getElementById("userName");
       const name = nameInput.value.trim();
       if (!name) {
@@ -240,35 +266,46 @@
       btn.textContent = "⏳ Обработка..."; btn.disabled = true;
 
       if (id === 'money') {
-        const {  current } = await supabase.from('gifts').select('claimed_by').eq('id', 'money').single();
-        const names = current?.claimed_by || [];
-        if (names.includes(name)) {
-          alert("✏️ Вы уже отметились в этом пункте!");
-          btn.textContent = "💰 Внести вклад"; btn.disabled = false; return;
+        try {
+          const { data: current, error: fetchErr } = await supabase.from('gifts').select('claimed_by').eq('id', 'money').single();
+          if (fetchErr) throw fetchErr;
+          const names = current?.claimed_by || [];
+          if (names.includes(name)) {
+            alert("✏️ Вы уже отметились в этом пункте!");
+            btn.textContent = "💰 Внести вклад"; btn.disabled = false; return;
+          }
+          names.push(name);
+          const { error: updateErr } = await supabase.from('gifts').update({ claimed_by: names }).eq('id', 'money');
+          if (updateErr) throw updateErr;
+          showToast(`🎉 ${name}, спасибо за вклад!`);
+          nameInput.value = "";
+        } catch (e) {
+          console.error(e); alert("⚠️ Ошибка сети.");
+        } finally {
+          btn.textContent = "💰 Внести вклад"; btn.disabled = false;
         }
-        names.push(name);
-        const { error } = await supabase.from('gifts').update({ claimed_by: names }).eq('id', 'money');
-        btn.textContent = "💰 Внести вклад"; btn.disabled = false;
-        if (error) { console.error(error); alert("⚠️ Ошибка сети."); }
-        else { showToast(`🎉 ${name}, спасибо за вклад!`); nameInput.value = ""; }
         return;
       }
 
-      const { data, error } = await supabase
-        .from('gifts')
-        .update({ claimed: true, claimed_by: [name] })
-        .eq('id', id)
-        .eq('claimed', false)
-        .select();
-
-      if (error) { console.error(error); alert("⚠️ Ошибка сети. Попробуй позже."); }
-      else if (data?.length > 0) {
-        showToast(`🎉 ${name}, ты забрал(а) подарок!`);
-        nameInput.value = "";
-      } else {
-        alert("😔 Этот подарок уже кто-то забрал!");
+      try {
+        const { data, error } = await supabase
+          .from('gifts')
+          .update({ claimed: true, claimed_by: [name] })
+          .eq('id', id)
+          .eq('claimed', false)
+          .select();
+        if (error) throw error;
+        if (data?.length > 0) {
+          showToast(`🎉 ${name}, ты забрал(а) подарок!`);
+          nameInput.value = "";
+        } else {
+          alert("😔 Этот подарок уже кто-то забрал!");
+        }
+      } catch (e) {
+        console.error(e); alert("⚠️ Ошибка сети. Попробуй позже.");
+      } finally {
+        btn.textContent = "🎁 Забрать"; btn.disabled = false;
       }
-      btn.textContent = "🎁 Забрать"; btn.disabled = false;
     }
 
     function showToast(msg) {
@@ -277,11 +314,13 @@
       setTimeout(() => toast.classList.remove("show"), 3000);
     }
 
+    // 🔑 Админ-панель
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get('admin') === ADMIN_SECRET) {
       document.getElementById('admin-panel').style.display = 'block';
       loadGifts();
     }
+
     loadGifts();
   </script>
 </body>
