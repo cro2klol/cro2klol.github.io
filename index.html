@@ -99,14 +99,20 @@
       const btn=document.querySelector("#card-"+id+" .claim-btn");
       btn.textContent="⏳ Проверка...";btn.disabled=true;
       try{
-        // 🔒 Проверка: не брал ли уже другой подарок? (кроме "Денег")
-        if(id!=="money"){
-          const{data:allGifts,error:fetchErr}=await db.from("gifts").select("id,claimed,claimed_by");
-          if(fetchErr)throw fetchErr;
-          const normalizedName=name.toLowerCase();
-          const alreadyHasGift=allGifts.some(g=>g.id!==id&&g.id!=="money"&&g.claimed&&g.claimed_by?.some(n=>n.toLowerCase().trim()===normalizedName));
-          if(alreadyHasGift){alert("⚠️ Вы уже выбрали другой подарок! Один человек = один вариант.");btn.textContent="🎁 Забрать";btn.disabled=false;return}
+        // 🔒 1. Проверка браузера (localStorage)
+        if(localStorage.getItem('wishlist_device_claimed')){
+          alert("⚠️ С этого браузера/устройства уже был выбран подарок.\n\nОдин человек = один вариант. Если вы выбирали с другого телефона — это ок.");
+          btn.textContent="🎁 Забрать";btn.disabled=false;return;
         }
+        // 🔒 2. Проверка по имени в БД (кроме "Денег")
+        if(id!=="money"){
+          const{allGifts,error:fetchErr}=await db.from("gifts").select("id,claimed,claimed_by");
+          if(fetchErr)throw fetchErr;
+          const normalizedName=name.toLowerCase().trim();
+          const alreadyHasGift=allGifts.some(g=>g.id!==id&&g.id!=="money"&&g.claimed&&g.claimed_by?.some(n=>n.toLowerCase().trim()===normalizedName));
+          if(alreadyHasGift){alert("⚠️ Это имя уже выбрало другой подарок! Один человек = один вариант.");btn.textContent="🎁 Забрать";btn.disabled=false;return}
+        }
+        // 🎁 Логика выбора
         if(id==="money"){
           const{current,error:moneyErr}=await db.from("gifts").select("claimed_by").eq("id","money").single();
           if(moneyErr)throw moneyErr;
@@ -115,11 +121,16 @@
           names.push(name);
           const{error:updateErr}=await db.from("gifts").update({claimed_by:names}).eq("id","money");
           if(updateErr)throw updateErr;
-          showToast(`🎉 ${name}, спасибо за вклад!`);nameInput.value="";btn.textContent="💰 Внести вклад";btn.disabled=false;return;
+          showToast(`🎉 ${name}, спасибо за вклад!`);nameInput.value="";
+          localStorage.setItem('wishlist_device_claimed','true');
+          btn.textContent="💰 Внести вклад";btn.disabled=false;return;
         }
         const{data,error}=await db.from("gifts").update({claimed:true,claimed_by:[name]}).eq("id",id).eq("claimed",false).select();
         if(error)throw error;
-        if(data?.length>0){showToast(`🎉 ${name}, ты забрал(а) подарок!`);nameInput.value=""}else{alert("😔 Этот подарок уже кто-то забрал!")}
+        if(data?.length>0){
+          showToast(`🎉 ${name}, ты забрал(а) подарок!`);nameInput.value="";
+          localStorage.setItem('wishlist_device_claimed','true');
+        }else{alert("😔 Этот подарок уже кто-то забрал!")}
       }catch(e){console.error(e);alert("⚠️ Ошибка сети. Попробуй позже.")}finally{btn.textContent=id==="money"?"💰 Внести вклад":"🎁 Забрать";btn.disabled=false}
     }
     function showToast(msg){const toast=document.getElementById("toast");toast.textContent=msg;toast.classList.add("show");setTimeout(()=>toast.classList.remove("show"),3000)}
