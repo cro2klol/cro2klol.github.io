@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Придёт ли Костян? — Букмекерская контора</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+    :root{--bg:#0a0a0f;--card:#12121a;--border:#2a2a3a;--accent:#7c3aed;--accent-glow:rgba(124,58,237,0.4);--green:#10b981;--green-glow:rgba(16,185,129,0.3);--red:#ef4444;--red-glow:rgba(239,68,68,0.3);--text:#e2e8f0;--muted:#64748b;--gold:#f59e0b}
+    body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overflow-x:hidden}
+    .bg-animation{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+    .bg-animation .orb{position:absolute;border-radius:50%;filter:blur(80px);opacity:0.15;animation:float 20s ease-in-out infinite}
+    .bg-animation .orb:nth-child(1){width:400px;height:400px;background:var(--accent);top:-100px;left:-100px;animation-delay:0s}
+    .bg-animation .orb:nth-child(2){width:300px;height:300px;background:var(--red);bottom:-50px;right:-50px;animation-delay:-7s}
+    .bg-animation .orb:nth-child(3){width:250px;height:250px;background:var(--green);top:50%;left:50%;animation-delay:-14s}
+    @keyframes float{0%,100%{transform:translate(0,0) scale(1)}25%{transform:translate(100px,-50px) scale(1.1)}50%{transform:translate(-50px,100px) scale(0.9)}75%{transform:translate(80px,50px) scale(1.05)}}
+    .container{position:relative;z-index:1;max-width:700px;margin:0 auto;padding:2rem 1rem}
+    .header{text-align:center;margin-bottom:2.5rem}
+    .header .badge{display:inline-block;background:linear-gradient(135deg,var(--accent),#a855f7);color:#fff;font-size:0.7rem;font-weight:700;text-transform:uppercase;letter-spacing:2px;padding:0.35rem 1rem;border-radius:999px;margin-bottom:1rem}
+    .header h1{font-size:2.2rem;font-weight:800;line-height:1.2;margin-bottom:0.5rem;background:linear-gradient(135deg,#fff,#a78bfa);-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .header .subtitle{color:var(--muted);font-size:1rem}
+    .header .subtitle strong{color:var(--gold);-webkit-text-fill-color:var(--gold)}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:2rem;margin-bottom:1.5rem;backdrop-filter:blur(10px)}
+    .card-title{font-size:0.8rem;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:1.5rem;display:flex;align-items:center;gap:0.5rem}
+    .card-title .icon{font-size:1rem}
+    .bet-amount{display:flex;align-items:center;justify-content:center;gap:0.75rem;padding:1.25rem;background:linear-gradient(135deg,rgba(245,158,11,0.1),rgba(245,158,11,0.05));border:1px solid rgba(245,158,11,0.2);border-radius:12px;margin-bottom:2rem}
+    .bet-amount .coin{font-size:1.5rem}
+    .bet-amount .amount{font-size:1.5rem;font-weight:800;color:var(--gold)}
+    .bet-amount .label{font-size:0.85rem;color:var(--muted)}
+    .answers{display:grid;grid-template-columns:1fr 1fr;gap:1rem;margin-bottom:1.5rem}
+    .answer-btn{position:relative;padding:1.5rem 1rem;border:2px solid var(--border);border-radius:12px;background:transparent;color:var(--text);font-size:1.1rem;font-weight:700;cursor:pointer;transition:all 0.3s ease;display:flex;flex-direction:column;align-items:center;gap:0.5rem}
+    .answer-btn .emoji{font-size:2rem;transition:transform 0.3s ease}
+    .answer-btn:hover{transform:translateY(-2px)}
+    .answer-btn.selected-yes{border-color:var(--green);background:rgba(16,185,129,0.1);box-shadow:0 0 30px var(--green-glow)}
+    .answer-btn.selected-yes .emoji{transform:scale(1.2)}
+    .answer-btn.selected-no{border-color:var(--red);background:rgba(239,68,68,0.1);box-shadow:0 0 30px var(--red-glow)}
+    .answer-btn.selected-no .emoji{transform:scale(1.2)}
+    .form-group{margin-bottom:1.5rem}
+    .form-group label{display:block;font-size:0.85rem;font-weight:600;color:var(--muted);margin-bottom:0.5rem}
+    .form-group input{width:100%;padding:0.9rem 1rem;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);font-size:1rem;transition:border-color 0.3s;outline:none}
+    .form-group input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+    .form-group input::placeholder{color:#4a4a5a}
+    .form-group .error{color:var(--red);font-size:0.8rem;margin-top:0.4rem;display:none}
+    .form-group .error.visible{display:block}
+    .date-range-section{margin-bottom:1.5rem;padding:1.25rem;background:rgba(239,68,68,0.05);border:1px solid rgba(239,68,68,0.15);border-radius:12px;display:none}
+    .date-range-section.visible{display:block;animation:slideDown 0.3s ease}
+    @keyframes slideDown{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+    .date-range-section h3{font-size:0.95rem;margin-bottom:1rem;color:var(--red)}
+    .date-ranges{display:grid;grid-template-columns:1fr 1fr;gap:0.5rem}
+    .date-range-btn{padding:0.75rem;border:1px solid var(--border);border-radius:8px;background:transparent;color:var(--text);font-size:0.85rem;font-weight:600;cursor:pointer;transition:all 0.2s}
+    .date-range-btn:hover{border-color:var(--red);background:rgba(239,68,68,0.1)}
+    .date-range-btn.selected{border-color:var(--red);background:rgba(239,68,68,0.2);box-shadow:0 0 15px var(--red-glow)}
+    .submit-btn{width:100%;padding:1rem;border:none;border-radius:12px;background:linear-gradient(135deg,var(--accent),#a855f7);color:#fff;font-size:1.1rem;font-weight:700;cursor:pointer;transition:all 0.3s;position:relative;overflow:hidden}
+    .submit-btn:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 8px 30px var(--accent-glow)}
+    .submit-btn:disabled{opacity:0.4;cursor:not-allowed}
+    .submit-btn::after{content:'';position:absolute;inset:0;background:linear-gradient(135deg,transparent,rgba(255,255,255,0.1));opacity:0;transition:opacity 0.3s}
+    .submit-btn:hover::after{opacity:1}
+    .stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0.75rem;margin-bottom:1.5rem}
+    .stat-card{text-align:center;padding:1rem 0.5rem;background:var(--card);border:1px solid var(--border);border-radius:12px}
+    .stat-card .value{font-size:1.8rem;font-weight:800}
+    .stat-card .value.yes-val{color:var(--green)}.stat-card .value.no-val{color:var(--red)}.stat-card .value.total-val{color:var(--gold)}
+    .stat-card .label{font-size:0.7rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);margin-top:0.25rem}
+    .bets-list{list-style:none;display:flex;flex-direction:column;gap:0.5rem;max-height:400px;overflow-y:auto}
+    .bets-list::-webkit-scrollbar{width:4px}
+    .bets-list::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+    .bet-item{display:flex;align-items:center;justify-content:space-between;padding:0.9rem 1rem;background:var(--bg);border:1px solid var(--border);border-radius:10px;animation:fadeIn 0.3s ease}
+    @keyframes fadeIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+    .bet-item .bet-name{font-weight:600;font-size:0.95rem}
+    .bet-item .bet-answer{font-size:0.8rem;font-weight:700;padding:0.3rem 0.7rem;border-radius:6px}
+    .bet-item .bet-answer.yes{background:rgba(16,185,129,0.15);color:var(--green)}
+    .bet-item .bet-answer.no{background:rgba(239,68,68,0.15);color:var(--red)}
+    .bet-item .bet-date{font-size:0.75rem;color:var(--muted)}
+    .empty-state{text-align:center;padding:2rem;color:var(--muted);font-size:0.9rem}
+    .success-overlay{position:fixed;inset:0;z-index:100;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.8);backdrop-filter:blur(5px)}
+    .success-overlay.visible{display:flex;animation:fadeIn 0.3s ease}
+    .success-modal{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:2.5rem;text-align:center;max-width:400px;width:90%}
+    .success-modal .check{font-size:4rem;margin-bottom:1rem;animation:bounceIn 0.5s ease}
+    @keyframes bounceIn{0%{transform:scale(0)}50%{transform:scale(1.2)}100%{transform:scale(1)}}
+    .success-modal h2{font-size:1.3rem;margin-bottom:0.5rem}
+    .success-modal p{color:var(--muted);font-size:0.9rem;margin-bottom:1.5rem}
+    .success-modal button{padding:0.75rem 2rem;border:none;border-radius:10px;background:var(--accent);color:#fff;font-weight:600;cursor:pointer;font-size:0.95rem}
+    .loading{text-align:center;padding:2rem;color:var(--muted)}
+    .spinner{display:inline-block;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin 0.8s linear infinite;margin-bottom:0.5rem}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    @media(max-width:500px){.header h1{font-size:1.6rem}.answers{grid-template-columns:1fr}.date-ranges{grid-template-columns:1fr}.stats{grid-template-columns:1fr}.card{padding:1.25rem}}
+  </style>
+</head>
+<body>
+  <div class="bg-animation"><div class="orb"></div><div class="orb"></div><div class="orb"></div></div>
+  <div class="container">
+    <header class="header">
+      <div class="badge">🎲 Букмекерская контора</div>
+      <h1>Придёт ли Костян в первый рабочий день после отпуска?</h1>
+      <p class="subtitle">Сделай ставку. <strong>100 ₽</strong> — и ты в игре.</p>
+    </header>
+    <div class="stats">
+      <div class="stat-card"><div class="value yes-val" id="statYes">0</div><div class="label">За «Да»</div></div>
+      <div class="stat-card"><div class="value no-val" id="statNo">0</div><div class="label">За «Нет»</div></div>
+      <div class="stat-card"><div class="value total-val" id="statTotal">0 ₽</div><div class="label">Банк</div></div>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="icon">💰</span> Сделать ставку</div>
+      <div class="bet-amount"><span class="coin">💵</span><span class="amount">100 ₽</span><span class="label">— фиксированная ставка</span></div>
+      <div class="answers">
+        <button class="answer-btn" id="btnYes" onclick="selectAnswer('yes')"><span class="emoji">✅</span>Да, придёт</button>
+        <button class="answer-btn" id="btnNo" onclick="selectAnswer('no')"><span class="emoji">🤷</span>Нет, не придёт</button>
+      </div>
+      <div class="date-range-section" id="dateRangeSection">
+        <h3>📅 Когда он появится? (выбери 3-дневный диапазон в мае)</h3>
+        <div class="date-ranges" id="dateRanges"></div>
+      </div>
+      <div class="form-group">
+        <label for="nameInput">👤 Твоё имя</label>
+        <input type="text" id="nameInput" placeholder="Как тебя зовут?" maxlength="50" autocomplete="off">
+        <div class="error" id="nameError">Это имя уже сделало ставку!</div>
+      </div>
+      <button class="submit-btn" id="submitBtn" onclick="submitBet()" disabled>🎰 Поставить 100 ₽</button>
+    </div>
+    <div class="card">
+      <div class="card-title"><span class="icon">📋</span> Все ставки</div>
+      <div id="betsContainer"><div class="loading"><div class="spinner"></div><div>Загружаем ставки...</div></div></div>
+    </div>
+  </div>
+  <div class="success-overlay" id="successOverlay">
+    <div class="success-modal">
+      <div class="check">🎉</div><h2>Ставка принята!</h2><p id="successText"></p><button onclick="closeSuccess()">Отлично!</button>
+    </div>
+  </div>
+
+  <script>
+    // ===== SUPABASE CONFIG =====
+    const SUPABASE_URL = 'https://zsuttrmetiyhhibdvexw.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpzdXR0cm1ldGl5aGhpYmR2ZXh3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4NTI3NzgsImV4cCI6MjA5MjQyODc3OH0.Ia1aRF5A_Iq3c15n2dv_gZIXMemd0rEjVq1tqpiWbps';
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let selectedAnswer = null, selectedDateFrom = null, selectedDateTo = null;
+
+    // Generate date buttons (1-3 to 29-31 May)
+    const dateRanges = document.getElementById('dateRanges');
+    for(let i=1; i<=29; i++){
+      const btn = document.createElement('button');
+      btn.className = 'date-range-btn';
+      btn.textContent = `${i} — ${i+2} мая`;
+      btn.onclick = () => selectDateRange(btn, i, i+2);
+      dateRanges.appendChild(btn);
+    }
+
+    function selectAnswer(answer){
+      selectedAnswer = answer;
+      const btnYes = document.getElementById('btnYes'), btnNo = document.getElementById('btnNo');
+      const dateSection = document.getElementById('dateRangeSection');
+      btnYes.classList.remove('selected-yes'); btnNo.classList.remove('selected-no');
+      if(answer === 'yes'){
+        btnYes.classList.add('selected-yes');
+        dateSection.classList.remove('visible');
+        selectedDateFrom = selectedDateTo = null;
+        document.querySelectorAll('.date-range-btn').forEach(b=>b.classList.remove('selected'));
+      } else {
+        btnNo.classList.add('selected-no');
+        dateSection.classList.add('visible');
+      }
+      updateSubmitButton();
+    }
+
+    function selectDateRange(btn, from, to){
+      selectedDateFrom = from; selectedDateTo = to;
+      document.querySelectorAll('.date-range-btn').forEach(b=>b.classList.remove('selected'));
+      btn.classList.add('selected');
+      updateSubmitButton();
+    }
+
+    function updateSubmitButton(){
+      const name = document.getElementById('nameInput').value.trim();
+      const btn = document.getElementById('submitBtn');
+      let valid = selectedAnswer !== null && name.length > 0;
+      if(selectedAnswer === 'no' && selectedDateFrom === null) valid = false;
+      btn.disabled = !valid;
+    }
+    document.getElementById('nameInput').addEventListener('input', updateSubmitButton);
+
+    async function submitBet(){
+      const name = document.getElementById('nameInput').value.trim();
+      const btn = document.getElementById('submitBtn');
+      if(!name || !selectedAnswer) return;
+      if(selectedAnswer === 'no' && selectedDateFrom === null) return;
+      btn.disabled = true; btn.textContent = '⏳ Отправляем...';
+
+      const { data: existing } = await supabase.from('bets').select('id').eq('name', name.toLowerCase()).maybeSingle();
+      if(existing){
+        document.getElementById('nameError').classList.add('visible');
+        btn.disabled = false; btn.textContent = '🎰 Поставить 100 ₽';
+        return;
+      }
+
+      const { error } = await supabase.from('bets').insert({
+        name: name.toLowerCase(), answer: selectedAnswer,
+        date_range_from: selectedDateFrom, date_range_to: selectedDateTo
+      });
+      if(error){ alert('Ошибка: '+error.message); btn.disabled=false; btn.textContent='🎰 Поставить 100 ₽'; return; }
+
+      const dateText = selectedAnswer === 'yes' ? 'Ты веришь, что Костян придёт! 💪' : `Ты думаешь, он появится ${selectedDateFrom}–${selectedDateTo} мая 🤷`;
+      document.getElementById('successText').textContent = dateText;
+      document.getElementById('successOverlay').classList.add('visible');
+      resetForm(); loadBets();
+    }
+
+    function resetForm(){
+      selectedAnswer = selectedDateFrom = selectedDateTo = null;
+      document.getElementById('nameInput').value = '';
+      document.getElementById('btnYes').classList.remove('selected-yes');
+      document.getElementById('btnNo').classList.remove('selected-no');
+      document.getElementById('dateRangeSection').classList.remove('visible');
+      document.querySelectorAll('.date-range-btn').forEach(b=>b.classList.remove('selected'));
+      document.getElementById('submitBtn').disabled = true;
+      document.getElementById('submitBtn').textContent = '🎰 Поставить 100 ₽';
+      document.getElementById('nameError').classList.remove('visible');
+    }
+    function closeSuccess(){ document.getElementById('successOverlay').classList.remove('visible'); }
+
+    async function loadBets(){
+      const { data, error } = await supabase.from('bets').select('*').order('created_at',{ascending:false});
+      if(error){ document.getElementById('betsContainer').innerHTML = '<div class="empty-state">Ошибка загрузки 😢</div>'; return; }
+      const yesCount = data.filter(b=>b.answer==='yes').length;
+      const noCount = data.filter(b=>b.answer==='no').length;
+      document.getElementById('statYes').textContent = yesCount;
+      document.getElementById('statNo').textContent = noCount;
+      document.getElementById('statTotal').textContent = ((yesCount+noCount)*100)+' ₽';
+      if(data.length===0){ document.getElementById('betsContainer').innerHTML = '<div class="empty-state">Пока никто не поставил. Будь первым! 🎲</div>'; return; }
+      let html = '<ul class="bets-list">';
+      data.forEach(bet=>{
+        const answerLabel = bet.answer==='yes'?'✅ Да':'❌ Нет';
+        const answerClass = bet.answer==='yes'?'yes':'no';
+        const dateInfo = bet.date_range_from ? `· ${bet.date_range_from}–${bet.date_range_to} мая` : '';
+        const time = new Date(bet.created_at);
+        const timeStr = time.toLocaleDateString('ru-RU',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'});
+        html += `<li class="bet-item"><div><div class="bet-name">${escapeHtml(bet.name)}</div><div class="bet-date">${timeStr}${dateInfo}</div></div><span class="bet-answer ${answerClass}">${answerLabel}</span></li>`;
+      });
+      html += '</ul>';
+      document.getElementById('betsContainer').innerHTML = html;
+    }
+    function escapeHtml(t){const d=document.createElement('div');d.textContent=t;return d.innerHTML;}
+
+    loadBets();
+    setInterval(loadBets, 10000);
+  </script>
+</body>
+</html>
